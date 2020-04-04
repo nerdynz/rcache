@@ -38,7 +38,10 @@ func New(redisURL string, logger logger) *Cache {
 
 	if redisURL == "" {
 		opts.Host = os.Getenv("REDISHOST")
-		opts.Port = os.Getenv("REDISPORT")
+		i, err := strconv.Atoi(os.Getenv("REDISPORT") + "")
+		if err == nil {
+			opts.Port = i
+		}
 	} else {
 		opts = &xredis.Options{}
 		u, err := url.Parse(redisURL)
