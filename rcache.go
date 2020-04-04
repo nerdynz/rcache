@@ -4,6 +4,7 @@ import (
 	"errors"
 	"io"
 	"net/url"
+	"os"
 	"strconv"
 	"strings"
 	"time"
@@ -35,7 +36,10 @@ func New(redisURL string, logger logger) *Cache {
 		// DB:       0,  // use default DB
 	}
 
-	if redisURL != "" {
+	if redisURL == "" {
+		opts.Host = os.Getenv("REDISHOST")
+		opts.Port = os.Getenv("REDISPORT")
+	} else {
 		opts = &xredis.Options{}
 		u, err := url.Parse(redisURL)
 		if err != nil {
