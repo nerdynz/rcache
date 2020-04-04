@@ -42,6 +42,7 @@ func New(redisURL string, logger logger) *Cache {
 		if err == nil {
 			opts.Port = i
 		}
+		logger.Info("trying cache with defaults", opts)
 	} else {
 		opts = &xredis.Options{}
 		u, err := url.Parse(redisURL)
@@ -62,9 +63,9 @@ func New(redisURL string, logger logger) *Cache {
 			return nil
 		}
 		opts.Port = port
+		logger.Info("trying cache with redis url", opts)
 	}
 
-	logger.Info("trying cache", opts)
 	client := xredis.SetupClient(opts)
 	pong, err := client.Ping()
 	if err != nil {
