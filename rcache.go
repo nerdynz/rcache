@@ -2,7 +2,7 @@ package rcache
 
 import (
 	"errors"
-	"io"
+	"log/slog"
 	"net/url"
 	"os"
 	"strconv"
@@ -12,23 +12,23 @@ import (
 	"github.com/shomali11/xredis"
 )
 
-type logger interface {
-	SetOutput(out io.Writer)
-	Print(args ...interface{})
-	Printf(format string, args ...interface{})
-	Println(args ...interface{})
-	Info(args ...interface{})
-	Infof(format string, args ...interface{})
-	Infoln(args ...interface{})
-	Warn(args ...interface{})
-	Warnf(format string, args ...interface{})
-	Warnln(args ...interface{})
-	Error(args ...interface{})
-	Errorf(format string, args ...interface{})
-	Errorln(args ...interface{})
-}
+// type slog interface {
+// 	SetOutput(out io.Writer)
+// 	Print(args ...interface{})
+// 	Printf(format string, args ...interface{})
+// 	Println(args ...interface{})
+// 	Info(args ...interface{})
+// 	Infof(format string, args ...interface{})
+// 	Infoln(args ...interface{})
+// 	Warn(args ...interface{})
+// 	Warnf(format string, args ...interface{})
+// 	Warnln(args ...interface{})
+// 	Error(args ...interface{})
+// 	Errorf(format string, args ...interface{})
+// 	Errorln(args ...interface{})
+// }
 
-func New(redisURL string, logger logger) *Cache {
+func New(redisURL string) *Cache {
 	opts := &xredis.Options{
 		Host:     "localhost",
 		Port:     6379,
@@ -42,12 +42,12 @@ func New(redisURL string, logger logger) *Cache {
 		if err == nil {
 			opts.Port = i
 		}
-		logger.Info("trying cache with defaults --- host=", opts.Host, " port= ", opts.Port)
+		slog.Info("trying cache with defaults", "host", opts.Host, " port ", opts.Port)
 	} else {
 		opts = &xredis.Options{}
 		u, err := url.Parse(redisURL)
 		if err != nil {
-			logger.Error(err)
+			slog.Error("error", "err", err)
 			return nil
 		}
 		opts.Host = u.Host
@@ -59,21 +59,21 @@ func New(redisURL string, logger logger) *Cache {
 		// opts.User = u.User.Username()
 		port, err := strconv.Atoi(u.Port())
 		if err != nil {
-			logger.Error("cache couldn't parse port")
+			slog.Error("cache couldn't parse port")
 			return nil
 		}
 		opts.Port = port
-		logger.Info("trying cache with redis url --- host=", opts.Host, " port= ", opts.Port)
+		slog.Info("trying cache with redis url", "host=", opts.Host, " port= ", opts.Port)
 	}
 
 	client := xredis.SetupClient(opts)
 	pong, err := client.Ping()
 	if err != nil {
-		logger.Error(err)
+		slog.Error("ping err ", "err", err)
 		return nil
 	}
 
-	logger.Info("cache running", pong)
+	slog.Info("cache running", pong)
 	return &Cache{
 		Client: client,
 	}
