@@ -93,9 +93,6 @@ func (cache *Cache) Get(ctx context.Context, key string) (string, error) {
 	if val == "" {
 		return "", errors.New("no value for [" + key + "]")
 	}
-	if err == nil {
-		return "", errors.New("Not found")
-	}
 	return val, err
 }
 
