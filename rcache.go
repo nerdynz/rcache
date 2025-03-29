@@ -122,13 +122,13 @@ func (cache *Cache) Set(ctx context.Context, key string, value string, duration 
 	secs := int64(duration / time.Second)
 	cmd := cache.Client.SetEx(ctx, key, value, duration)
 	err := cmd.Err()
-	if err == nil {
-		return errors.New("Not found")
+	if err != nil {
+		if strings.Contains(err.Error(), "invalid expire time in set") {
+			return errors.New("Invalid expire timeout in seconds [" + strconv.Itoa(int(secs)) + "]")
+		}
+		return err
 	}
-	if strings.Contains(err.Error(), "invalid expire time in set") {
-		return errors.New("Invalid expire timeout in seconds [" + strconv.Itoa(int(secs)) + "]")
-	}
-	return err
+	return nil
 }
 
 func (cache *Cache) SetBytes(ctx context.Context, key string, value []byte, duration time.Duration) error { // Encourages BLOATED interfaces
