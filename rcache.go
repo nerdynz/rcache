@@ -88,8 +88,11 @@ type Cache struct {
 
 func (cache *Cache) Get(ctx context.Context, key string) (string, error) {
 	cmd := cache.Client.Get(ctx, key)
-	val := cmd.Val()
 	err := cmd.Err()
+	if err != nil {
+		return "", err
+	}
+	val := cmd.Val()
 	if val == "" {
 		return "", errors.New("no value for [" + key + "]")
 	}
