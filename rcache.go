@@ -1,7 +1,9 @@
 package rcache
 
 import (
+	"context"
 	"errors"
+	"fmt"
 	"log/slog"
 	"net/url"
 	"os"
@@ -9,7 +11,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/shomali11/xredis"
+	redis "github.com/redis/go-redis/v9"
 )
 
 // type slog interface {
@@ -29,46 +31,47 @@ import (
 // }
 
 func New(redisURL string) *Cache {
-	opts := &xredis.Options{
-		Host:     "localhost",
-		Port:     6379,
+	host := "localhost"
+	port := 6379
+	opts := &redis.Options{
 		Password: "", // no password set
 		// DB:       0,  // use default DB
 	}
 
 	if redisURL == "" {
-		opts.Host = os.Getenv("REDISHOST")
+		host := os.Getenv("REDISHOST")
 		i, err := strconv.Atoi(os.Getenv("REDISPORT") + "")
 		if err == nil {
-			opts.Port = i
+			port = i
 		}
-		slog.Info("trying cache with defaults", "host", opts.Host, " port ", opts.Port)
+		slog.Info("trying cache with defaults", "host", host, " port ", port)
 	} else {
-		opts = &xredis.Options{}
+		opts = &redis.Options{}
 		u, err := url.Parse(redisURL)
 		if err != nil {
 			slog.Error("error", "err", err)
 			return nil
 		}
-		opts.Host = u.Host
-		if strings.Contains(opts.Host, ":") {
-			opts.Host = strings.Split(opts.Host, ":")[0]
+		host = u.Host
+		if strings.Contains(host, ":") {
+			host = strings.Split(host, ":")[0]
 		}
 		p, _ := u.User.Password()
 		opts.Password = p
 		// opts.User = u.User.Username()
-		port, err := strconv.Atoi(u.Port())
+		port, err = strconv.Atoi(u.Port())
 		if err != nil {
 			slog.Error("cache couldn't parse port")
 			return nil
 		}
-		opts.Port = port
-		slog.Info("trying cache with redis url", "host=", opts.Host, " port= ", opts.Port)
 	}
+	slog.Info("trying cache with redis url", "host=", host, " port= ", port)
 
-	client := xredis.SetupClient(opts)
-	pong, err := client.Ping()
-	if err != nil {
+	opts.Addr = fmt.Sprintf("%s:%d", host, port)
+	client := redis.NewClient(opts)
+
+	pong := client.Conn().Ping(context.Background())
+	if err := pong.Err(); err != nil {
 		slog.Error("ping err ", "err", err)
 		return nil
 	}
@@ -80,58 +83,62 @@ func New(redisURL string) *Cache {
 }
 
 type Cache struct {
-	Client *xredis.Client
+	Client *redis.Client
 }
 
-func (cache *Cache) Get(key string) (string, error) {
-	val, ok, err := cache.Client.Get(key)
+func (cache *Cache) Get(ctx context.Context, key string) (string, error) {
+	cmd := cache.Client.Get(ctx, key)
+	val := cmd.Val()
+	err := cmd.Err()
 	if val == "" {
 		return "", errors.New("no value for [" + key + "]")
 	}
-	if !ok && err == nil {
+	if err == nil {
 		return "", errors.New("Not found")
 	}
 	return val, err
 }
 
-func (cache *Cache) Del(key string) error {
-	_, err := cache.Client.Expire(key, 1)
+func (cache *Cache) Del(ctx context.Context, key string) error {
+	cmd := cache.Client.Expire(ctx, key, 1)
+	err := cmd.Err()
 	return err
 }
 
-func (cache *Cache) Expire(key string) error {
-	err := cache.Del(key)
+func (cache *Cache) Expire(ctx context.Context, key string) error {
+	err := cache.Del(ctx, key)
 	return err
 }
 
-func (cache *Cache) GetBytes(key string) ([]byte, error) { // Encourages BLOATED interfaces
-	val, err := cache.Get(key)
+func (cache *Cache) GetBytes(ctx context.Context, key string) ([]byte, error) { // Encourages BLOATED interfaces
+	val, err := cache.Get(ctx, key)
 	if err != nil {
 		return nil, err
 	}
 	return []byte(val), nil
 }
 
-func (cache *Cache) Set(key string, value string, duration time.Duration) error {
+func (cache *Cache) Set(ctx context.Context, key string, value string, duration time.Duration) error {
 	secs := int64(duration / time.Second)
-	ok, err := cache.Client.SetEx(key, value, secs)
-	if !ok {
-		if err == nil {
-			return errors.New("Not found")
-		}
-		if strings.Contains(err.Error(), "invalid expire time in set") {
-			return errors.New("Invalid expire timeout in seconds [" + strconv.Itoa(int(secs)) + "]")
-		}
+	cmd := cache.Client.SetEx(ctx, key, value, duration)
+	err := cmd.Err()
+	if err == nil {
+		return errors.New("Not found")
+	}
+	if strings.Contains(err.Error(), "invalid expire time in set") {
+		return errors.New("Invalid expire timeout in seconds [" + strconv.Itoa(int(secs)) + "]")
 	}
 	return err
 }
 
-func (cache *Cache) SetBytes(key string, value []byte, duration time.Duration) error { // Encourages BLOATED interfaces
+func (cache *Cache) SetBytes(ctx context.Context, key string, value []byte, duration time.Duration) error { // Encourages BLOATED interfaces
 	result := string(value[:])
-	err := cache.Set(key, result, duration)
+	err := cache.Set(ctx, key, result, duration)
 	return err
 }
 
-func (cache *Cache) FlushDB() error {
-	return cache.Client.FlushDb()
+func (cache *Cache) FlushDB(ctx context.Context) error {
+	cmd := cache.Client.FlushDB(ctx)
+
+	return cmd.Err()
 }
